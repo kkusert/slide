@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>บทที่ 1 การจัดการเครือข่าย — กรณีศึกษาที่ 1 และ 4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0a1420;
+    --panel: #101f30;
+    --panel-2: #14283d;
+    --line: #223c56;
+    --text: #eef3f8;
+    --muted: #7d93ab;
+    --fault: #e8654a;
+    --config: #45c9c2;
+    --account: #f0b23f;
+    --perf: #7b93ff;
+    --security: #b083df;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  html,body{height:100%;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family:'IBM Plex Sans Thai', sans-serif;
+    overflow:hidden;
+    position:relative;
+  }
+  body::before{
+    content:"";
+    position:fixed; inset:0;
+    background-image:
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 64px 64px;
+    opacity:.08;
+    pointer-events:none;
+    z-index:0;
+  }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  /* ===== deck shell ===== */
+  .deck{ position:relative; width:100%; height:100vh; z-index:1; }
+  .slide{
+    position:absolute; inset:0;
+    display:none;
+    padding: 64px 88px 96px;
+    flex-direction:column;
+  }
+  .slide.active{ display:flex; animation: rise .5s ease; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+
+  .kicker{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--muted); display:flex; align-items:center; gap:10px;
+    margin-bottom:18px;
+  }
+  .kicker .idx{ color:var(--config); }
+  h1.big{
+    font-size:52px; font-weight:600; line-height:1.15; letter-spacing:-.01em;
+    max-width:16ch;
+  }
+  h2.head{
+    font-size:34px; font-weight:600; margin-bottom:6px; letter-spacing:-.01em;
+  }
+  .sub{ color:var(--muted); font-size:16px; margin-bottom:28px; max-width:60ch; }
+  .body-text{ font-size:19px; line-height:1.75; max-width:66ch; color:#dfe7ee; }
+
+  /* ===== FCAPS legend rail ===== */
+  .rail{
+    position:fixed; right:36px; top:50%; transform:translateY(-50%);
+    display:flex; flex-direction:column; gap:18px; z-index:5;
+  }
+  .rail .dot-row{ display:flex; align-items:center; gap:10px; }
+  .rail .led{
+    width:11px; height:11px; border-radius:50%;
+    background: #24384c; box-shadow: none;
+    transition: all .35s ease;
+  }
+  .rail .lbl{
+    font-family:'IBM Plex Mono', monospace; font-size:11px; color:#4c637c;
+    letter-spacing:.06em; transition: color .35s ease;
+  }
+  .rail .dot-row.on .led{ box-shadow: 0 0 12px 2px var(--c); background: var(--c); }
+  .rail .dot-row.on .lbl{ color: var(--text); }
+  .rail .dot-row[data-k="F"]{ --c: var(--fault); }
+  .rail .dot-row[data-k="C"]{ --c: var(--config); }
+  .rail .dot-row[data-k="A"]{ --c: var(--account); }
+  .rail .dot-row[data-k="P"]{ --c: var(--perf); }
+  .rail .dot-row[data-k="S"]{ --c: var(--security); }
+
+  /* ===== progress + nav ===== */
+  .footer{
+    position:fixed; left:88px; right:130px; bottom:38px; z-index:5;
+    display:flex; align-items:center; gap:16px;
+  }
+  .track{ flex:1; height:2px; background:var(--line); position:relative; overflow:hidden; border-radius:2px;}
+  .track i{ position:absolute; inset:0; width:0%; background: linear-gradient(90deg,var(--config),var(--perf)); transition: width .4s ease; }
+  .count{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--muted); white-space:nowrap; }
+
+  .navbtn{
+    position:fixed; bottom:32px; z-index:6;
+    width:44px; height:44px; border-radius:50%;
+    border:1px solid var(--line); background:var(--panel);
+    color:var(--text); font-size:18px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition: border-color .2s ease, transform .15s ease;
+  }
+  .navbtn:hover{ border-color: var(--config); transform: translateY(-2px); }
+  #prevBtn{ right:80px; }
+  #nextBtn{ right:24px; }
+
+  /* ===== components ===== */
+  .card{
+    background: var(--panel);
+    border:1px solid var(--line);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .scenario-card{
+    background: var(--panel);
+    border-left: 3px solid var(--config);
+    border-radius: 4px;
+    padding: 28px 32px;
+    max-width: 74ch;
+    font-size:19px; line-height:1.8; color:#dfe7ee;
+  }
+  .tag-row{ display:flex; gap:10px; margin-bottom:22px; flex-wrap:wrap; }
+  .tag{
+    font-family:'IBM Plex Mono', monospace; font-size:12px; padding:6px 12px;
+    border-radius:20px; border:1px solid var(--line); color:var(--muted);
+  }
+  .tag.hot{ color: var(--bg); font-weight:600; }
+
+  .primary-block{ display:flex; gap:28px; margin-top:8px; align-items:flex-start; }
+  .primary-badge{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:14px; padding:14px 20px; border-radius:8px;
+    background: var(--panel-2); border:1px solid var(--line);
+    min-width:230px;
+  }
+  .primary-badge .k{ display:block; color:var(--muted); font-size:11px; letter-spacing:.1em; margin-bottom:6px;}
+  .primary-badge .v{ font-size:17px; font-weight:600; }
+
+  .overlap-list{ display:flex; flex-direction:column; gap:14px; margin-top:18px; }
+  .overlap-item{
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:16px 20px; font-size:15.5px; line-height:1.6; color:#dbe4ec;
+  }
+  .overlap-item .chips{ margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+  .chip{ font-family:'IBM Plex Mono', monospace; font-size:11px; padding:4px 10px; border-radius:20px; color:var(--bg); font-weight:600; }
+
+  table.pmp{ border-collapse:collapse; width:100%; max-width:900px; font-size:14.5px; }
+  table.pmp th{
+    text-align:left; font-family:'IBM Plex Mono', monospace; font-size:11px;
+    letter-spacing:.08em; color:var(--muted); padding:10px 14px; border-bottom:1px solid var(--line);
+    text-transform:uppercase;
+  }
+  table.pmp td{ padding:12px 14px; border-bottom:1px solid var(--line); vertical-align:top; line-height:1.55; color:#dfe7ee; }
+  table.pmp tr td:first-child{ font-family:'IBM Plex Mono', monospace; color:var(--config); white-space:nowrap; font-size:13px; font-weight:600; }
+
+  .grid2{ display:grid; grid-template-columns: 1fr 1fr; gap:26px; margin-top:10px; }
+  .mini-card{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 22px; }
+  .mini-card h3{ font-size:16px; margin-bottom:10px; }
+  .mini-card .badge{ font-family:'IBM Plex Mono', monospace; font-size:11px; padding:4px 10px; border-radius:20px; display:inline-block; margin-bottom:10px; color:var(--bg); font-weight:700; }
+  .mini-card p{ font-size:14px; color:var(--muted); line-height:1.6; }
+
+  .fcaps-grid{ display:grid; grid-template-columns: repeat(5, 1fr); gap:16px; margin-top:20px; max-width:1000px; }
+  .fcaps-cell{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:20px 16px; }
+  .fcaps-cell .letter{ font-family:'IBM Plex Mono', monospace; font-size:28px; font-weight:700; }
+  .fcaps-cell .name{ font-size:13.5px; margin-top:8px; font-weight:600; line-height:1.3; }
+  .fcaps-cell .desc{ font-size:12px; color:var(--muted); margin-top:8px; line-height:1.5; }
+
+  /* signature: title packet path */
+  .netviz{ position:absolute; right:70px; top:110px; width:360px; height:340px; opacity:.9; }
+  .netviz .pulse{ animation: pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse{ 0%,100%{ opacity:.35;} 50%{ opacity:1;} }
+  .netviz .flow{ stroke-dasharray: 6 10; animation: dash 3s linear infinite; }
+  @keyframes dash{ to{ stroke-dashoffset:-160; } }
+
+  ::selection{ background: var(--config); color:var(--bg); }
+</style>
+</head>
+<body>
+
+<div class="rail" id="rail">
+  <div class="dot-row" data-k="F"><span class="led"></span><span class="lbl mono">FAULT</span></div>
+  <div class="dot-row" data-k="C"><span class="led"></span><span class="lbl mono">CONFIG</span></div>
+  <div class="dot-row" data-k="A"><span class="led"></span><span class="lbl mono">ACCOUNT</span></div>
+  <div class="dot-row" data-k="P"><span class="led"></span><span class="lbl mono">PERF</span></div>
+  <div class="dot-row" data-k="S"><span class="led"></span><span class="lbl mono">SECURITY</span></div>
+</div>
+
+<div class="deck" id="deck">
+
+  <!-- 1: TITLE -->
+  <section class="slide active" data-fcaps="">
+    <svg class="netviz" viewBox="0 0 360 340">
+      <g stroke="#223c56" stroke-width="1" fill="none">
+        <line x1="60" y1="40" x2="180" y2="120"/>
+        <line x1="300" y1="60" x2="180" y2="120"/>
+        <line x1="180" y1="120" x2="90" y2="230"/>
+        <line x1="180" y1="120" x2="270" y2="240"/>
+        <line x1="90" y1="230" x2="270" y2="240"/>
+      </g>
+      <g stroke="#45c9c2" stroke-width="1.6" fill="none" class="flow">
+        <line x1="180" y1="120" x2="90" y2="230"/>
+      </g>
+      <circle cx="180" cy="120" r="7" fill="#45c9c2" class="pulse"/>
+      <circle cx="60" cy="40" r="5" fill="#7b93ff"/>
+      <circle cx="300" cy="60" r="5" fill="#7b93ff"/>
+      <circle cx="90" cy="230" r="5" fill="#e8654a" class="pulse"/>
+      <circle cx="270" cy="240" r="5" fill="#f0b23f"/>
+    </svg>
+    <div style="margin-top:auto; margin-bottom:auto;">
+      <div class="kicker"><span class="idx">01 / 11</span><span>NETWORK MANAGEMENT · CHAPTER 1</span></div>
+      <h1 class="big">ความรู้เบื้องต้นเกี่ยวกับ<br>การจัดการเครือข่าย</h1>
+      <p class="sub" style="margin-top:20px; font-size:18px; max-width:50ch;">วิเคราะห์กรณีศึกษาตามกรอบ FCAPS พร้อมแนวทางบริหารจัดการแบบ Process – Method – Procedure – Task – Tools</p>
+      <div class="tag-row" style="margin-top:26px;">
+        <span class="tag mono">กรณีศึกษาที่ 1 · ERP Performance/Fault</span>
+        <span class="tag mono">กรณีศึกษาที่ 4 · Bandwidth Accounting</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2: FCAPS overview -->
+  <section class="slide" data-fcaps="">
+    <div class="kicker"><span class="idx">02 / 11</span><span>กรอบมาตรฐาน</span></div>
+    <h2 class="head">มาตรฐานการจัดการเครือข่าย 5 ด้าน (FCAPS)</h2>
+    <p class="sub">กรอบที่ใช้จำแนกว่ากิจกรรมการดูแลเครือข่ายแต่ละอย่างเป็นความรับผิดชอบด้านใด</p>
+    <div class="fcaps-grid">
+      <div class="fcaps-cell"><div class="letter" style="color:var(--fault)">F</div><div class="name">Fault Management</div><div class="desc">ตรวจจับ วิเคราะห์ และแก้ไขความผิดพลาดของระบบ</div></div>
+      <div class="fcaps-cell"><div class="letter" style="color:var(--config)">C</div><div class="name">Configuration Management</div><div class="desc">ตั้งค่าและควบคุมการเปลี่ยนแปลงของอุปกรณ์</div></div>
+      <div class="fcaps-cell"><div class="letter" style="color:var(--account)">A</div><div class="name">Accounting Management</div><div class="desc">บันทึกและรายงานปริมาณการใช้ทรัพยากรของผู้ใช้/แผนก</div></div>
+      <div class="fcaps-cell"><div class="letter" style="color:var(--perf)">P</div><div class="name">Performance Management</div><div class="desc">ติดตามและปรับปรุงประสิทธิภาพของเครือข่าย</div></div>
+      <div class="fcaps-cell"><div class="letter" style="color:var(--security)">S</div><div class="name">Security Management</div><div class="desc">ควบคุมการเข้าถึงและป้องกันภัยคุกคาม</div></div>
+    </div>
+  </section>
+
+  <!-- 3: Case 1 scenario -->
+  <section class="slide" data-fcaps="F,P">
+    <div class="kicker"><span class="idx">03 / 11</span><span>กรณีศึกษาที่ 1 · สถานการณ์</span></div>
+    <h2 class="head">ระบบ ERP ทำงานช้าและล่มเป็นบางวัน</h2>
+    <div class="scenario-card" style="margin-top:20px;">
+      องค์กรมีระบบ ERP อยู่ใน Data Center มีผู้ใช้งานภายในบริษัท 200 คน มีรายงานว่า ERP ใช้งานช้าในช่วงบ่าย และมีบางวันระบบล่ม
+      ผู้ดูแลพยายามวิเคราะห์ผ่าน log และสังเกตว่า switch ที่เป็นตัวหลักของระบบ มีข้อผิดพลาดเกี่ยวกับการส่งแพ็กเก็ตเพิ่มขึ้น
+    </div>
+  </section>
+
+  <!-- 4: Case 1 FCAPS analysis -->
+  <section class="slide" data-fcaps="F,P">
+    <div class="kicker"><span class="idx">04 / 11</span><span>กรณีศึกษาที่ 1 · วิเคราะห์ FCAPS</span></div>
+    <h2 class="head">กิจกรรมสำคัญอยู่ในด้านใด</h2>
+    <div class="primary-block">
+      <div class="primary-badge">
+        <span class="k mono">ด้านหลัก</span>
+        <span class="v" style="color:var(--fault)">Fault Management</span>
+      </div>
+      <div class="primary-badge">
+        <span class="k mono">ควรให้ความสำคัญที่สุด</span>
+        <span class="v" style="color:var(--fault)">Fault Management</span>
+      </div>
+    </div>
+    <div class="overlap-list">
+      <div class="overlap-item">
+        "ERP ใช้งานช้าและระบบล่ม"
+        <div class="chips">
+          <span class="chip" style="background:var(--fault)">Fault</span>
+          <span class="chip" style="background:var(--perf)">Performance</span>
+        </div>
+      </div>
+      <div class="overlap-item">
+        "ผู้ดูแลวิเคราะห์ log และพบว่า switch มีข้อผิดพลาดในการส่งแพ็กเก็ตเพิ่มขึ้น"
+        <div class="chips">
+          <span class="chip" style="background:var(--fault)">Fault</span>
+          <span class="chip" style="background:var(--perf)">Performance</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5: Case 1 PMPTT -->
+  <section class="slide" data-fcaps="F,P">
+    <div class="kicker"><span class="idx">05 / 11</span><span>กรณีศึกษาที่ 1 · แนวทางจัดการ</span></div>
+    <h2 class="head">FCAPS - Process – Method – Procedure – Task – Tools</h2>
+    <table class="pmp" style="margin-top:16px;">
+      <tr><th>FCAPS</th><td>การจัดการด้านความผิดพลาด (Fault Management) และด้านประสิทธิภาพ (Performance Management) ของเครือข่าย</td></tr>
+      <tr><th>Process</th><td>ค้นหาสาเหตุที่ทำให้ ERP ทำงานช้าช่วงบ่ายและระบบล่มเป็นบางวัน พร้อมลดข้อผิดพลาดในการส่งแพ็กเก็ตของ switch หลัก เพื่อให้ผู้ใช้ทั้ง 200 คนใช้งานได้ต่อเนื่องและมีเสถียรภาพ</td></tr>
+      <tr><th>Method</th><td>ตรวจสอบ log ของ ERP Server และ switch หลัก ตรวจสถิติ error ของพอร์ต (CRC error, packet drop, collision) และ monitor ปริมาณ traffic ช่วงเวลาที่เกิดปัญหา เทียบกับช่วงปกติ</td></tr>
+      <tr><th>Procedure</th><td>รวบรวม log → ตรวจสถิติ error บน switch ย้อนหลัง → monitor bandwidth/traffic ช่วงบ่าย → ทดสอบด้วย ping/traceroute → วิเคราะห์สาเหตุ (สาย/พอร์ตชำรุด, bandwidth ไม่พอ, switch เสื่อม) → ดำเนินการแก้ไข</td></tr>
+      <tr><th>Task</th><td>ทีมผู้ดูแลระบบเครือข่ายปฏิบัติตามลำดับ procedure ทีละขั้น พร้อมบันทึกผลการตรวจสอบและการแก้ไขใน Incident Report เพื่อติดตามผล</td></tr>
+      <tr><th>Tools</th><td>SNMP Monitoring (PRTG/SolarWinds) · Wireshark · Switch Management Console (CLI/Web GUI) · คำสั่ง ping, traceroute · Log Analyzer / Syslog Server</td></tr>
+    </table>
+  </section>
+
+  <!-- 6: Case 4 scenario -->
+  <section class="slide" data-fcaps="A,C,P">
+    <div class="kicker"><span class="idx">06 / 11</span><span>กรณีศึกษาที่ 4 · สถานการณ์</span></div>
+    <h2 class="head">รายงานการใช้แบนด์วิดท์รายแผนก</h2>
+    <div class="scenario-card" style="margin-top:20px;">
+      ฝ่าย IT ต้องการรายงานว่าแต่ละแผนกใช้แบนด์วิดท์เท่าใด เพื่อเสนอปรับปรุง QoS (Quality of Service) และกำหนดโควต้าสำหรับบางแอปพลิเคชัน เช่น video streaming
+    </div>
+  </section>
+
+  <!-- 7: Case 4 FCAPS analysis -->
+  <section class="slide" data-fcaps="A,C,P">
+    <div class="kicker"><span class="idx">07 / 11</span><span>กรณีศึกษาที่ 4 · วิเคราะห์ FCAPS</span></div>
+    <h2 class="head">กิจกรรมสำคัญอยู่ในด้านใด</h2>
+    <div class="primary-block">
+      <div class="primary-badge">
+        <span class="k mono">ด้านหลัก</span>
+        <span class="v" style="color:var(--account)">Accounting Management</span>
+      </div>
+      <div class="primary-badge">
+        <span class="k mono">ควรให้ความสำคัญที่สุด</span>
+        <span class="v" style="color:var(--account)">Accounting Management</span>
+      </div>
+    </div>
+    <div class="overlap-list">
+      <div class="overlap-item">
+        "รายงานว่าแต่ละแผนกใช้แบนด์วิดท์เท่าใด"
+        <div class="chips">
+          <span class="chip" style="background:var(--account)">Accounting</span>
+          <span class="chip" style="background:var(--perf)">Performance</span>
+        </div>
+      </div>
+      <div class="overlap-item">
+        "เสนอปรับปรุง QoS และกำหนดโควต้าสำหรับบางแอป เช่น video streaming"
+        <div class="chips">
+          <span class="chip" style="background:var(--config)">Configuration</span>
+          <span class="chip" style="background:var(--perf)">Performance</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8: Case 4 PMPTT -->
+  <section class="slide" data-fcaps="A,C,P">
+    <div class="kicker"><span class="idx">08 / 11</span><span>กรณีศึกษาที่ 4 · แนวทางจัดการ</span></div>
+    <h2 class="head">FCAPS - Process – Method – Procedure – Task – Tools</h2>
+    <table class="pmp" style="margin-top:16px;">
+      <tr><th>FCAPS</th><td>การจัดการด้านการบันทึก/บัญชีการใช้งาน (Accounting Management) และด้านประสิทธิภาพ (Performance Management) ของเครือข่าย</td></tr>
+      <tr><th>Process</th><td>เก็บรวบรวมข้อมูลปริมาณการใช้แบนด์วิดท์ของแต่ละแผนก เพื่อจัดทำรายงานเสนอฝ่ายบริหารสำหรับปรับปรุงนโยบาย QoS และกำหนดโควต้าการใช้งานแอปพลิเคชัน เช่น video streaming</td></tr>
+      <tr><th>Method</th><td>แบ่ง VLAN / IP Address ตามแผนก ใช้เครื่องมือ monitor traffic แบบ NetFlow/sFlow และ SNMP เก็บสถิติการใช้งานย้อนหลังตามช่วงเวลา แล้ววิเคราะห์สรุปเป็นรายงาน</td></tr>
+      <tr><th>Procedure</th><td>กำหนด VLAN/IP แยกตามแผนก → ติดตั้งและกำหนดค่าเครื่องมือ monitor traffic → เก็บรวบรวมข้อมูลการใช้งานต่อเนื่อง → วิเคราะห์และจัดทำรายงานรายแผนก → เสนอปรับปรุงนโยบาย QoS และโควต้า</td></tr>
+      <tr><th>Task</th><td>ฝ่าย IT จัดทำรายงานการใช้แบนด์วิดท์เป็นประจำ (รายสัปดาห์/รายเดือน) และนำเสนอต่อผู้บริหารเพื่อพิจารณาอนุมัตินโยบาย QoS และโควต้าการใช้งาน</td></tr>
+      <tr><th>Tools</th><td>NetFlow / sFlow Analyzer · SNMP Monitoring (PRTG/SolarWinds) · Router/Switch QoS Configuration · Bandwidth Monitoring Dashboard · Excel / เครื่องมือจัดทำรายงาน</td></tr>
+    </table>
+  </section>
+
+  <!-- 9: Summary comparison -->
+  <section class="slide" data-fcaps="F,C,A,P">
+    <div class="kicker"><span class="idx">09 / 11</span><span>สรุปเปรียบเทียบ</span></div>
+    <h2 class="head">สองกรณีศึกษา สองมุมของการจัดการเครือข่าย</h2>
+    <div class="grid2">
+      <div class="mini-card">
+        <span class="badge" style="background:var(--fault)">กรณีศึกษาที่ 1</span>
+        <h3>ERP ช้า / ล่ม — Fault + Performance</h3>
+        <p>เริ่มจากอาการผิดปกติ (fault) ที่กระทบประสิทธิภาพ (performance) ต้องอาศัยการวิเคราะห์ log และเครื่องมือ monitoring เพื่อหาสาเหตุที่ต้นทางแล้วแก้ไข</p>
+      </div>
+      <div class="mini-card">
+        <span class="badge" style="background:var(--account)">กรณีศึกษาที่ 4</span>
+        <h3>รายงานแบนด์วิดท์ — Accounting + Configuration</h3>
+        <p>เริ่มจากความต้องการเชิงบริหาร (accounting) เพื่อวางนโยบายการใช้ทรัพยากรอย่างเป็นธรรม แล้วนำไปสู่การปรับตั้งค่า (configuration) QoS/โควต้า</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10: Q&A -->
+  <section class="slide" data-fcaps="">
+    <div class="kicker"><span class="idx">10 / 11</span><span>เปิดให้ซักถาม</span></div>
+    <svg class="netviz" viewBox="0 0 360 340" style="right:60px; top:60px; opacity:.5;">
+      <g stroke="#223c56" stroke-width="1" fill="none">
+        <line x1="60" y1="40" x2="180" y2="120"/>
+        <line x1="300" y1="60" x2="180" y2="120"/>
+        <line x1="180" y1="120" x2="90" y2="230"/>
+        <line x1="180" y1="120" x2="270" y2="240"/>
+      </g>
+      <circle cx="180" cy="120" r="7" fill="#7b93ff" class="pulse"/>
+      <circle cx="60" cy="40" r="5" fill="#45c9c2"/>
+      <circle cx="300" cy="60" r="5" fill="#45c9c2"/>
+      <circle cx="90" cy="230" r="5" fill="#e8654a"/>
+      <circle cx="270" cy="240" r="5" fill="#f0b23f"/>
+    </svg>
+    <div style="margin-top:auto; margin-bottom:auto;">
+      <h1 class="big" style="font-size:64px;">QUESTION<span class="mono" style="color:var(--config);">?</span></h1>
+      <p class="sub" style="margin-top:22px; font-size:18px; max-width:60ch;">มีข้อสงสัยเกี่ยวกับ FCAPS หรือกรณีศึกษาข้อใด สอบถามได้เลยครับ</p>
+    </div>
+  </section>
+
+  <!-- 11: Members / credits -->
+  <section class="slide" data-fcaps="">
+    <div class="kicker"><span class="idx">11 / 11</span><span>ผู้จัดทำ</span></div>
+    <h2 class="head">จัดทำโดย</h2>
+    <p class="sub">บทที่ 1 ความรู้เบื้องต้นเกี่ยวกับการจัดการเครือข่าย</p>
+    <div class="grid2" style="grid-template-columns:1fr; gap:14px; max-width:640px; margin-top:12px;">
+      <div class="mini-card" style="display:flex; align-items:center; gap:18px;">
+        <span class="badge mono" style="background:var(--fault); min-width:34px; text-align:center;">01</span>
+        <div>
+          <h3 style="margin-bottom:4px;">นายพงศ์กรณ์ ศิริตรานนท์</h3>
+          <p class="mono" style="color:var(--muted);">รหัสนักศึกษา 67003263018</p>
+        </div>
+      </div>
+      <div class="mini-card" style="display:flex; align-items:center; gap:18px;">
+        <span class="badge mono" style="background:var(--config); min-width:34px; text-align:center;">02</span>
+        <div>
+          <h3 style="margin-bottom:4px;">นายคชา รัตนบุษยาพร</h3>
+          <p class="mono" style="color:var(--muted);">รหัสนักศึกษา 67003263033</p>
+        </div>
+      </div>
+      <div class="mini-card" style="display:flex; align-items:center; gap:18px;">
+        <span class="badge mono" style="background:var(--account); min-width:34px; text-align:center;">03</span>
+        <div>
+          <h3 style="margin-bottom:4px;">นายธนชาติ ส่องแสงจันทร์</h3>
+          <p class="mono" style="color:var(--muted);">รหัสนักศึกษา 67003263029</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<div class="footer">
+  <span class="count mono" id="count">01 / 09</span>
+  <div class="track"><i id="progressBar"></i></div>
+</div>
+<button class="navbtn" id="prevBtn" aria-label="ก่อนหน้า">←</button>
+<button class="navbtn" id="nextBtn" aria-label="ถัดไป">→</button>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  const total = slides.length;
+  let idx = 0;
+  const countEl = document.getElementById('count');
+  const bar = document.getElementById('progressBar');
+  const railRows = document.querySelectorAll('.rail .dot-row');
+
+  function render(){
+    slides.forEach((s,i)=> s.classList.toggle('active', i===idx));
+    countEl.textContent = String(idx+1).padStart(2,'0') + ' / ' + String(total).padStart(2,'0');
+    bar.style.width = ((idx+1)/total*100) + '%';
+    const active = (slides[idx].dataset.fcaps || '').split(',').filter(Boolean);
+    railRows.forEach(row=>{
+      row.classList.toggle('on', active.includes(row.dataset.k));
+    });
+  }
+  function go(delta){
+    idx = (idx + delta + total) % total;
+    render();
+  }
+  document.getElementById('nextBtn').addEventListener('click', ()=>go(1));
+  document.getElementById('prevBtn').addEventListener('click', ()=>go(-1));
+  window.addEventListener('keydown', (e)=>{
+    if(e.key==='ArrowRight' || e.key===' ') go(1);
+    if(e.key==='ArrowLeft') go(-1);
+  });
+  let touchX = null;
+  window.addEventListener('touchstart', e=> touchX = e.touches[0].clientX);
+  window.addEventListener('touchend', e=>{
+    if(touchX===null) return;
+    const dx = e.changedTouches[0].clientX - touchX;
+    if(Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+    touchX = null;
+  });
+  render();
+</script>
+</body>
+</html>
